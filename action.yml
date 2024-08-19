@@ -104,25 +104,6 @@ inputs:
     description: 'Please press nember instead of r(e.g. : 26).'
     required: false
     default: r21b
-  anykernel3:
-    description: 'Package kernel use anykernel3.'
-    required: false
-    default: false
-  anykernel3-url:
-    description: '3rdparty anykernrl3 url path'
-    required: false
-    default: ""
-  bootimg-url:
-    description: "boot.img path"
-    required: false
-    default: ""
-  release:
-    description: "After the kernel compilation is completed, it will be automatically published to the releases page"
-    required: false
-    default: false
-  access-token:
-    description: 'PAT with repository scope (https://github.com/settings/tokens)'
-    required: false
   extra-cmd:
     description: 'Extra options of building kernel.'
     required: false
@@ -381,97 +362,11 @@ runs:
 
          unset USE_CCACHE CLANG_TRIPLE CROSS_COMPILE_ARM32 CROSS_COMPILE CLANG_PATH HOMES SUBLEVEL KVER COMMAND SWAP_FILE
 
-         if [ ${{ inputs.anykernel3 }} = false ]; then
-            echo "::group:: Preparing to Upload boot.img"
-            mkdir split
-            cd split
-            export HOST_ARCH=$(dpkg --print-architecture)
-            case ${HOST_ARCH} in
-                armv7* | armv8l | arm64 | armhf | arm) aria2c https://github.com/Shubhamvis98/AIK/raw/4ac321dfd48e16344e6146c505708aa720ff0bb3/bin/magiskboot_arm -o magiskboot && chmod 755 magiskboot ;;
-                i*86 | x86 | amd64 | x86_64) aria2c https://github.com/Shubhamvis98/AIK/raw/4ac321dfd48e16344e6146c505708aa720ff0bb3/bin/magiskboot_x86 -o magiskboot && chmod 755 magiskboot  ;;
-                *) echo "Unknow cpu architecture for this device !" && exit 1 ;;
-            esac
-            aria2c ${{ inputs.bootimg-url }} -o boot.img
-            nohup ./magiskboot unpack boot.img
-            export FMT=$(cat nohup.out | grep "KERNEL_FMT" | awk '{gsub("\\[", "", $2); gsub("\\]", "", $2); print $2}')
-            if [ "$FMT" = "raw" ] ; then
-                cp -v ../out/arch/${{ inputs.arch }}/boot/Image kernel
-            else
-                if ls dtb >/dev/null ; then
-                    cp -v ../out/arch/${{ inputs.arch }}/boot/Image.*-dtb kernel
-                else
-                    cp -v ../out/arch/${{ inputs.arch }}/boot/Image.* kernel
-                fi
-            fi
-            ./magiskboot repack boot.img
-            rm -rf boot.img
-            mkdir -p -v ../../../build
-            mv *.img ../../../build/boot.img -v
-            cd ..
-            echo "::endgroup::"
-         else
-            echo "::group:: Packaging Anykernel3 flasher"
-            if [ ! -z ${{ inputs.anykernel3-url }} ]; then
-                git clone ${{ inputs.anykernel3-url }} AnyKernel3
-            else
-                git clone https://github.com/osm0sis/AnyKernel3
-                sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=auto;!g' AnyKernel3/anykernel.sh
-                sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
-                sed -i 's/is_slot_device=0;/IS_SLOT_DEVICE=auto;/g' AnyKernel3/anykernel.sh
-            fi
-
-            if [ -f out/arch/${{ inputs.arch }}/boot/Image.*-dtb ]; then
-                cp out/arch/${{ inputs.arch }}/boot/Image.*-dtb AnyKernel3/ -rv
-            elif [ -f out/arch/${{ inputs.arch }}/boot/Image.* ]; then
-                cp out/arch/${{ inputs.arch }}/boot/Image.* AnyKernel3/ -rv
-            else
-                cp out/arch/${{ inputs.arch }}/boot/Image AnyKernel3/ -rv
-            fi
-
-            test -f out/arch/${{ inputs.arch }}/boot/dtbo.img && cp -v out/arch/${{ inputs.arch }}/boot/dtbo.img AnyKernel3/
-
-            rm -rf -v AnyKernel3/.git* AnyKernel3/README.md
-            if [ ${{ inputs.release }} = false ]; then
-                cp AnyKernel3 ../../build -r -v
-            else
-                zip Anykernel3-flasher.zip AnyKernel3/*
-                mv Anykernel3-flasher.zip ../../build -v
-            fi
-            echo "::endgroup::"
-         fi
-
-    - id: uploadi
-      if: ${{ inputs.release == 'false' && inputs.anykernel3 == 'false' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-built-bootimg
-        path: build/*
-        if-no-files-found: error
-        overwrite: true
-
-    - id: uploada
-      if: ${{ inputs.release == 'false' && inputs.anykernel3 == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: Anykernel3-flasher
-        path: build/*
-        if-no-files-found: error
-        overwrite: true
-
-    - id: release
-      if: inputs.release == 'true'
-      uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ inputs.access-token }}
-      with:
-        name: Last CI build kernel
-        tag_name: last-ci
-        files: build/*
-        make_latest: true
-        body: |
-            config: ${{ inputs.config }}
-            branch: ${{ inputs.kernel-branch }}
-            source: ${{ inputs.kernel-url }}
+         echo "::group:: Preparing to Upload boot.img"
+         cp -v /home/runner/work/KSU-Boot-CI/KSU-Boot-CI/kernel/kernel/out/arch/${{ inputs.arch }}/boot/Image* kernel
+         pwd
+         ls
+         echo "::endgroup::"
 
 posts:
   using: 'composite'
